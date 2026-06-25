@@ -1,0 +1,11 @@
+{
+  "name": "wifi4h",
+  "version": "1.0.1",
+  "description": "WiFi connection + captive-portal hotspot for ESP32 — consumer-defined field schema, NVS persistence, schema-driven form rendering",
+  "keywords": ["wifi", "captive-portal", "hotspot", "nvs", "esp32", "provisioning"],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "dependencies": {
+    "bblanchon/ArduinoJson": "^7.0.0"
+  }
+}
