@@ -15,7 +15,6 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.value }}
       name: ${{ steps.meta.outputs.name }}
-      skipped: ${{ steps.create.outputs.skipped }}
 
     steps:
       - uses: actions/checkout@v4
@@ -34,27 +33,23 @@ jobs:
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
-        id: create
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG=${{ steps.version.outputs.tag }}
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "Release $TAG already exists, skipping."
-            echo "skipped=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           gh release create "$TAG" \
             --title "$TAG" \
             --notes "Release $TAG" \
             --latest
-          echo "skipped=false" >> "$GITHUB_OUTPUT"
 
   publish:
     name: Package and publish to Pocket
     runs-on: self-hosted
     needs: release
-    if: needs.release.outputs.skipped != 'true'
 
     steps:
       - uses: actions/checkout@v4
@@ -83,9 +78,19 @@ jobs:
           NAME=${{ needs.release.outputs.name }}
           VERSION=${{ needs.release.outputs.version }}
           ARTIFACT="${NAME}-${VERSION}.zip"
-          curl -f -X POST \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "${{ secrets.POCKET_BASE_URL }}/api/repos/${NAME}/artifacts" \
             -H "x-pocket-token: ${{ secrets.POCKET_API_KEY }}" \
             -F "file=@${ARTIFACT}" \
             -F "name=${NAME}" \
-            -F "version=${VERSION}"
+            -F "version=${VERSION}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          if [ "$HTTP_CODE" = "409" ]; then
+            echo "Artifact ${NAME}@${VERSION} already exists in Pocket, skipping."
+            exit 0
+          fi
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "Upload failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+          echo "Uploaded ${NAME}@${VERSION} successfully."
